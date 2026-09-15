@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10.0"
+  required_version = "~> 1.16"
 
   required_providers {
     aws = {
@@ -17,7 +17,8 @@ terraform {
 }
 
 provider "aws" {
-  region = "eu-west-1"
+  # An input, so a regional rebuild re-applies this same code with region = "eu-central-1".
+  region = var.region
 
   # Ownership and cost-allocation tags on every resource (FinOps showback depends on them).
   default_tags {

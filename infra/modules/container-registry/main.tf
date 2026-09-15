@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10.0"
+  required_version = ">= 1.10.0, < 2.0.0"
 
   required_providers {
     aws = {
@@ -24,6 +24,14 @@ variable "untagged_expiry_days" {
   type        = number
   default     = 14
 }
+
+variable "replica_region" {
+  description = "Recovery region that receives a copy of every image, so a regional rebuild has something to deploy."
+  type        = string
+  default     = "eu-central-1"
+}
+
+data "aws_caller_identity" "current" {}
 
 # Immutable tags: a tag can never be moved to different content, so a digest recorded in a
 # deployment always means the image CI scanned. Scan on push catches known CVEs on arrival.
@@ -59,6 +67,23 @@ resource "aws_ecr_lifecycle_policy" "this" {
       }
     ]
   })
+}
+
+# Registry-level replication: every image pushed here is copied to the recovery region.
+resource "aws_ecr_replication_configuration" "this" {
+  replication_configuration {
+    rule {
+      destination {
+        region      = var.replica_region
+        registry_id = data.aws_caller_identity.current.account_id
+      }
+
+      repository_filter {
+        filter      = var.name
+        filter_type = "PREFIX_MATCH"
+      }
+    }
+  }
 }
 
 output "repository_url" {

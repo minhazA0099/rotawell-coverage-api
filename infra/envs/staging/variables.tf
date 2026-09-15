@@ -1,3 +1,9 @@
+variable "region" {
+  description = "Primary AWS region; an input so a regional rebuild re-applies the same code in eu-central-1."
+  type        = string
+  default     = "eu-west-1"
+}
+
 variable "image" {
   description = "Image to deploy, pinned by digest. Supplied by the release pipeline, never typed by hand."
   type        = string
