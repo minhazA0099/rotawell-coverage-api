@@ -1,0 +1,90 @@
+name: release
+
+# Releases never rebuild. An annotated tag on main promotes the image CI already built,
+# smoke-tested and scanned for that commit, by adding the version tag to the same digest.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  promote:
+    name: Promote tested image and publish release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the GitHub Release
+      packages: write # add the version tag to the existing image
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Require an annotated tag on a commit that is on main
+        run: |
+          # checkout can leave a lightweight copy of the tag; fetch the real tag object
+          git fetch --force --tags origin
+          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" != "tag" ]; then
+            echo "::error::$GITHUB_REF_NAME is a lightweight tag. Release tags must be annotated (git tag -a)."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at a commit that is not on main."
+            exit 1
+          fi
+
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote by digest (no rebuild)
+        id: promote
+        run: |
+          IMAGE_NAME="${IMAGE_NAME,,}" # registry names must be lowercase; repository owners need not be
+          source_ref="$IMAGE_NAME:sha-$GITHUB_SHA"
+          version="${GITHUB_REF_NAME#v}"
+          if ! docker buildx imagetools inspect "$source_ref" > /dev/null 2>&1; then
+            echo "::error::CI has not published a tested image for $GITHUB_SHA. Wait for CI on main to pass, then push the tag again."
+            exit 1
+          fi
+          docker buildx imagetools create --prefer-index=false --tag "$IMAGE_NAME:$version" "$source_ref"
+          source_digest=$(docker buildx imagetools inspect "$source_ref" --format '{{json .Manifest}}' | jq -r .digest)
+          release_digest=$(docker buildx imagetools inspect "$IMAGE_NAME:$version" --format '{{json .Manifest}}' | jq -r .digest)
+          if [ "$source_digest" != "$release_digest" ]; then
+            echo "::error::Promotion changed the digest ($source_digest became $release_digest)."
+            exit 1
+          fi
+          echo "digest=$release_digest" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Promoted image"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Image: \`$IMAGE_NAME:$version\`"
+            echo "- Digest: \`$release_digest\` (identical to the image CI built and scanned)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.promote.outputs.digest }}
+        run: |
+          {
+            git tag -l --format='%(contents)' "$GITHUB_REF_NAME"
+            echo
+            echo "---"
+            echo "Image: \`${IMAGE_NAME,,}:${GITHUB_REF_NAME#v}\` at \`$DIGEST\`"
+            echo "Commit: \`$GITHUB_SHA\`"
+            echo "The release version reaches /version as deploy-time configuration (APP_VERSION); the image itself is unchanged."
+          } > "$RUNNER_TEMP/release-notes.md"
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
