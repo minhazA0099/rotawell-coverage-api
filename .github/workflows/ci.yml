@@ -1,0 +1,52 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Least privilege by default; jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: Lint and test
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Third-party actions are pinned to full commit SHAs, not movable tags.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: Install hash-locked dependencies
+        run: |
+          python -m pip install --require-hashes -r requirements.txt
+          python -m pip install --require-hashes -r requirements-dev.txt
+
+      - name: Lint and formatting
+        run: |
+          ruff check .
+          ruff format --check .
+
+      - name: Tests with 90% coverage gate
+        run: pytest --junitxml=test-results.xml
+
+      - name: Keep test and coverage reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports
+          path: |
+            test-results.xml
+            coverage.xml
+          retention-days: 14
