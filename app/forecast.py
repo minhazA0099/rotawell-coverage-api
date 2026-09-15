@@ -34,7 +34,9 @@ def forecast_demand(history: object, horizon: object = SEASON_DAYS, weeks: int =
     series = _history(history)
     whole_number = isinstance(horizon, int) and not isinstance(horizon, bool)
     if not whole_number or not 1 <= horizon <= MAX_HORIZON_DAYS:
-        raise ValidationError(f"horizon must be a whole number of days from 1 to {MAX_HORIZON_DAYS}")
+        raise ValidationError(
+            f"horizon must be a whole number of days from 1 to {MAX_HORIZON_DAYS}"
+        )
     observed = len(series)
     for _ in range(horizon):
         position = len(series)
@@ -58,7 +60,8 @@ def mean_absolute_percentage_error(actual: list[float], predicted: list[float]) 
 def backtest(history: object, holdout_days: int = SEASON_DAYS) -> float:
     """Hide the most recent days, forecast them from the rest and return the MAPE (%)."""
     series = _history(history)
-    if len(series) < SEASON_DAYS + holdout_days:
-        raise ValidationError(f"backtest needs at least {SEASON_DAYS + holdout_days} days of history")
+    minimum_days = SEASON_DAYS + holdout_days
+    if len(series) < minimum_days:
+        raise ValidationError(f"backtest needs at least {minimum_days} days of history")
     training, actual = series[:-holdout_days], series[-holdout_days:]
     return mean_absolute_percentage_error(actual, forecast_demand(training, horizon=holdout_days))
