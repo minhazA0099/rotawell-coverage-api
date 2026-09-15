@@ -1,0 +1,12 @@
+# Review routing. In the Rotawell organisation the higher-risk paths below map to the
+# @rotawell/platform and @rotawell/security teams and the branch ruleset requires their
+# approval in addition to a squad reviewer. This demonstration repository has one maintainer.
+
+*                     @minhazA0099
+
+# Infrastructure, pipeline definitions and the container build change how everything else
+# is built and deployed, so they need a specialist owner.
+/infra/               @minhazA0099
+/.github/workflows/   @minhazA0099
+/Dockerfile           @minhazA0099
+/.checkov.yaml        @minhazA0099
