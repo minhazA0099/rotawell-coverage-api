@@ -156,12 +156,13 @@ resource "aws_lb_target_group" "green" {
 # --- Service ------------------------------------------------------------------------------------
 
 resource "aws_ecs_service" "this" {
+  #checkov:skip=CKV_AWS_332:The Fargate platform version is pinned so staging and production run the same platform; upgrades arrive as reviewed pull requests.
   name                              = local.name
   cluster                           = var.cluster_name
   task_definition                   = aws_ecs_task_definition.this.arn
   desired_count                     = var.desired_count
   launch_type                       = "FARGATE"
-  platform_version                  = "LATEST"
+  platform_version                  = var.fargate_platform_version
   health_check_grace_period_seconds = 30
   enable_execute_command            = false
   propagate_tags                    = "SERVICE"
@@ -183,10 +184,11 @@ resource "aws_ecs_service" "this" {
   }
 
   lifecycle {
-    # CodeDeploy changes the running task definition and the live target group on every
-    # blue-green deployment. Ignoring exactly these attributes keeps the nightly drift check
-    # quiet about expected changes, so any drift it does report is real.
-    ignore_changes = [task_definition, load_balancer]
+    # CodeDeploy owns the running task definition and the live target group, and service
+    # autoscaling owns the task count. Ignoring exactly these attributes keeps the nightly drift
+    # check quiet about expected changes, so any drift it does report is real. The running
+    # revision is protected by SCPs that allow ECS writes only from the pipeline and CodeDeploy.
+    ignore_changes = [task_definition, load_balancer, desired_count]
   }
 }
 
