@@ -1,0 +1,79 @@
+name: drift-detection
+
+# Nightly check that live infrastructure still matches the code. `terraform plan
+# -detailed-exitcode` exits with 2 when reality differs from code: the job fails and opens an
+# issue for the owning squad, who either re-apply the code or codify a legitimate emergency
+# change within 24 hours.
+#
+# The job is skipped until an AWS role for GitHub OIDC is configured (repository variable
+# AWS_DRIFT_ROLE_ARN), so this demonstration repository stays green without an AWS account.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Drift check (${{ matrix.environment }})
+    if: ${{ vars.AWS_DRIFT_ROLE_ARN != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write # OIDC: short-lived, read-only AWS credentials; no stored keys
+      issues: write # open an issue when drift is found
+    strategy:
+      fail-fast: false
+      matrix:
+        environment: [shared-services, staging, production]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DRIFT_ROLE_ARN }}
+          aws-region: eu-west-1
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.2
+          terraform_wrapper: false
+
+      - name: Plan against live infrastructure
+        id: plan
+        working-directory: infra/envs/${{ matrix.environment }}
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+          TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=$TF_STATE_BUCKET" \
+            -backend-config="key=$ENVIRONMENT/terraform.tfstate" \
+            -backend-config="region=eu-west-1"
+          # The deploy pipeline records the variables it last applied, so the check plans
+          # against exactly what is supposed to be live.
+          aws ssm get-parameter --name "/rotawell/$ENVIRONMENT/terraform.tfvars" \
+            --with-decryption --query Parameter.Value --output text > "$RUNNER_TEMP/live.tfvars"
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode -no-color \
+            -var-file="$RUNNER_TEMP/live.tfvars" > "$RUNNER_TEMP/plan.txt"
+          code=$?
+          set -e
+          tail -n 60 "$RUNNER_TEMP/plan.txt"
+          echo "exitcode=$code" >> "$GITHUB_OUTPUT"
+          if [ "$code" -eq 1 ]; then exit 1; fi
+
+      - name: Open an issue for drift
+        if: steps.plan.outputs.exitcode == '2'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          gh issue create \
+            --title "Drift detected in $ENVIRONMENT" \
+            --body "The nightly plan found live changes that are not in code: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. Re-apply the code, or codify a legitimate emergency change within 24 hours."
+          exit 1

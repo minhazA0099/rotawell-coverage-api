@@ -1,0 +1,10 @@
+# Policy-as-code checks for infrastructure. CI fails on any failed check.
+# Skips are never configured here globally: each one sits next to the resource it
+# applies to as "#checkov:skip=<ID>:<reason>" so the reason is reviewed with the code.
+directory:
+  - infra
+framework:
+  - terraform
+compact: true
+quiet: true
+download-external-modules: false
