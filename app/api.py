@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request
 
 from app.coverage import calculate_coverage, parse_demand, parse_shifts
 from app.errors import ValidationError
+from app.forecast import SEASON_DAYS, backtest, forecast_demand
 
 api = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
@@ -26,3 +27,19 @@ def coverage():
     demand = parse_demand(body.get("demand"))
     shifts = parse_shifts(body.get("shifts", []))
     return jsonify(calculate_coverage(demand, shifts))
+
+
+@api.post("/forecast")
+def forecast():
+    body = _json_object()
+    history = body.get("history")
+    predicted = forecast_demand(history, body.get("horizon", SEASON_DAYS))
+    try:
+        backtest_mape = backtest(history)
+    except ValidationError:
+        backtest_mape = None  # not enough history to hold a week out
+    return jsonify(
+        method="weekday-seasonal-moving-average",
+        forecast=predicted,
+        backtest_mape_percent=backtest_mape,
+    )
