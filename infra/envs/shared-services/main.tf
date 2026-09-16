@@ -1,5 +1,5 @@
 terraform {
-  required_version = ">= 1.10.0"
+  required_version = "~> 1.16"
 
   required_providers {
     aws = {
@@ -14,8 +14,14 @@ terraform {
   }
 }
 
+variable "region" {
+  description = "Primary AWS region; an input so a regional rebuild re-applies the same code elsewhere."
+  type        = string
+  default     = "eu-west-1"
+}
+
 provider "aws" {
-  region = "eu-west-1"
+  region = var.region
 
   default_tags {
     tags = {

@@ -50,8 +50,14 @@ variable "memory" {
 }
 
 variable "desired_count" {
-  description = "Number of tasks to run."
+  description = "Initial number of tasks. Service autoscaling owns the running count after creation."
   type        = number
+}
+
+variable "fargate_platform_version" {
+  description = "Pinned Fargate platform version, so every environment runs the same platform."
+  type        = string
+  default     = "1.4.0"
 }
 
 variable "cluster_name" {
