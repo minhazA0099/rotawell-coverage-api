@@ -3,6 +3,7 @@
 from flask import Flask, jsonify
 
 from app.api import api
+from app.version import build_info
 
 
 def create_app() -> Flask:
@@ -13,5 +14,9 @@ def create_app() -> Flask:
     @app.get("/healthz")
     def healthz():
         return jsonify(status="ok")
+
+    @app.get("/version")
+    def version():
+        return jsonify(build_info())
 
     return app
