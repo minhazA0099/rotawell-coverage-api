@@ -16,6 +16,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra --strict-markers --cov=app --cov-branch --cov-report=term-missing --cov-report=xml --cov-fail-under=90"
 
 [tool.coverage.run]
