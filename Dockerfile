@@ -4,7 +4,7 @@
 # layers and Dependabot proposes digest updates as reviewable pull requests.
 
 # ---- build stage: install hash-locked dependencies into a virtual environment ----------------
-FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS build
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS build
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -14,7 +14,7 @@ RUN python -m venv /opt/venv \
  && /opt/venv/bin/pip install --require-hashes --no-deps -r /tmp/requirements.txt
 
 # ---- runtime stage: only the virtual environment and the application code ---------------------
-FROM python:3.12-slim-trixie@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
+FROM python:3.13-slim-trixie@sha256:70729b46c69b4f1e97c4822c1af3df53a1476cf5ddc6c087c0c10bc3a5678c2f AS runtime
 
 # Stamped by CI. BUILD_DATE is the commit timestamp, so the same commit always carries the same
 # metadata. The release version is not baked in: it is supplied as configuration when a tested
